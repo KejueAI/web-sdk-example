@@ -4,3 +4,9 @@ node_modules/
 .env.local
 *.tsbuildinfo
 next-env.d.ts
+
+# Never commit local env files or their backups — they hold real API keys.
+.env.local
+.env.local.*
+.env.*.local
+*.bak-preexisting
