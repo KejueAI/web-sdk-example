@@ -2,17 +2,35 @@
 // integration, and the only place your API key is ever allowed to exist.
 //
 // The browser calls this, gets back a short-lived token, and connects straight
-// to Sonus over WebRTC. Audio never passes through this server, so this route
-// runs once per call and is nowhere near the media path — a web call has the
-// same latency as a phone call.
+// to Sonus. Nothing passes through this server afterwards, so this route runs
+// once per call and is nowhere near the media path — a web call has the same
+// latency as a phone call.
+//
+// One route serves BOTH surfaces. The browser asks for `audio` or `text` and
+// this route forwards it; everything else — the agent, the variables, the
+// metadata, the key — is identical, because on the Sonus side it is the same
+// agent either way.
 
 import { NextResponse } from 'next/server';
+
+type Modality = 'audio' | 'text';
 
 const API_URL = process.env.SONUS_API_URL ?? 'https://api.sonus.ws';
 const API_KEY = process.env.SONUS_API_KEY;
 const AGENT_ID = process.env.SONUS_AGENT_ID;
 
-export async function POST() {
+export async function POST(request: Request) {
+  // The browser picks the surface. Validate it here rather than forwarding
+  // whatever arrives — this is your endpoint, and Sonus rejects (rather than
+  // coerces) anything it does not recognise.
+  let modality: Modality = 'audio';
+  try {
+    const body = (await request.json()) as { modality?: string };
+    if (body?.modality === 'text') modality = 'text';
+  } catch {
+    // No body — keep the default. Voice is what an older caller expects.
+  }
+
   if (!API_KEY || !AGENT_ID) {
     return NextResponse.json(
       { error: 'Set SONUS_API_KEY and SONUS_AGENT_ID in .env.local (see .env.example)' },
@@ -43,6 +61,12 @@ export async function POST() {
     body: JSON.stringify({
       agent_id: AGENT_ID,
 
+      // 'audio' (the default) or 'text'. Same agent, same prompt, same tools —
+      // only the input and output planes differ. A text call is billed as
+      // minutes for its full duration, exactly like a voice call, and shares
+      // the same concurrency limit.
+      modality,
+
       // Rendered into the agent's prompt as {{user_name}} / {{plan}}. This is
       // how the agent greets someone by name or knows their tier without
       // asking. Names must match [A-Za-z_][A-Za-z0-9_]{0,63}.
@@ -71,7 +95,10 @@ export async function POST() {
     });
   }
 
-  // { call_id, token, ws_url, room_name, agent_name, expires_at_ms }
+  // { call_id, token, ws_url, room_name, agent_name, expires_at_ms, modality }
+  //
+  // `modality` is echoed back, which is what lets the browser hand the whole
+  // response to startCall() and get the right transport without being told.
   //
   // Handing the whole thing to the browser is fine. `token` authorises exactly
   // one room, expires in two minutes if unused, and can neither read nor

@@ -9,9 +9,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { SonusWebCall } from '@kejue/sonus-web';
-import type { AgentState, ToolActivity, TranscriptLine } from '@kejue/sonus-web';
+import type { AudioAgentState, ToolActivity, TranscriptLine } from '@kejue/sonus-web';
 
-const STATE_COPY: Record<AgentState, string> = {
+const STATE_COPY: Record<AudioAgentState, string> = {
   disconnected: 'Call ended',
   connecting: 'Connecting…',
   initializing: 'Getting ready…',
@@ -25,7 +25,7 @@ export function CallPanel() {
 
   const [live, setLive] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [state, setState] = useState<AgentState>('disconnected');
+  const [state, setState] = useState<AudioAgentState>('disconnected');
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const [tools, setTools] = useState<ToolActivity[]>([]);
   const [muted, setMuted] = useState(false);

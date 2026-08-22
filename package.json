@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kejue/sonus-web": "^0.0.1",
+    "@kejue/sonus-web": "file:../../platform-text-modality/packages/web-sdk",
     "livekit-client": "^2.18.9",
     "next": "^15.1.0",
     "react": "^19.0.0",

@@ -1,25 +1,33 @@
 # Sonus web-call SDK test
 
-A minimal Next.js app showing how a customer embeds a Sonus voice agent in
-their own product. Two files carry the whole integration:
+A minimal Next.js app showing how a customer embeds a Sonus agent in their own
+product — as a **voice call** or as a **text chat**. Both surfaces reach the
+same agent; only the input and output planes differ.
 
 | File | Runs on | Role |
 | --- | --- | --- |
-| `app/api/start-call/route.ts` | your server | holds the API key, mints a token |
-| `components/call-panel.tsx` | the browser | consumes the token, runs the call |
+| `app/api/start-call/route.ts` | your server | holds the API key, mints a token for either surface |
+| `components/call-panel.tsx` | the browser | voice: consumes the token, runs the call |
+| `components/chat-panel.tsx` | the browser | text: consumes the token, runs the chat |
+| `components/mode-switch.tsx` | the browser | the demo's voice/text toggle |
 
 ## How it fits together
 
 ```
-your backend  --(API key)------->  POST /v1/web-calls
+your backend  --(API key)------->  POST /v1/web-calls  {"modality": "audio" | "text"}
               <--(token, ws_url)--
-your frontend --(token)---------->  wss://agent.sonus.ws     [audio, WebRTC]
+your frontend --(token)---------->  wss://agent.sonus.ws     [audio, or typed turns]
 ```
 
-The key point: **your server is not on the audio path.** It runs once, before
+The key point: **your server is not on the media path.** It runs once, before
 the call, to mint a token. The browser then talks directly to Sonus, so a web
 call has the same latency as a phone call. Nothing about this changes if your
 backend is slow, far away, or serverless.
+
+The two panels are worth reading side by side. They are almost the same file:
+same credential flow, same `transcriptUpdate` rendering, same tool events. The
+text one has no microphone, no mute, no audio element and no autoplay gesture —
+and adds `send()` plus an optional `delta` stream for live typing.
 
 The browser never receives a Sonus credential. The token authorises exactly one
 room, expires in two minutes if unused, and can neither read nor change
@@ -33,12 +41,17 @@ cp .env.example .env.local     # fill in the three values
 bun dev                        # http://localhost:3100
 ```
 
-`package.json` currently points `@kejue/sonus-web` at a local tarball. Once the
-package is published, swap that for a normal version range:
+`package.json` currently points `@kejue/sonus-web` at the local package
+directory so the demo runs against an unpublished build. Once 0.1.0 is on npm,
+swap it back for a normal version range:
 
 ```jsonc
 { "dependencies": { "@kejue/sonus-web": "^0.1.0" } }
 ```
+
+Text calls need a worker running the text runtime. Against a deployment whose
+agent image predates it, the API still mints a `text` token and the worker
+serves audio into a room with no microphone — a chat that never answers.
 
 You need an API key with the **`calls:start-web`** permission — create it in the
 dashboard under Settings → API keys. Two things that will bite you:
@@ -51,6 +64,7 @@ dashboard under Settings → API keys. Two things that will bite you:
 ## What the SDK gives you
 
 ```ts
+// Voice
 const call = await SonusWebCall.start({
   credentials: () => fetch('/api/start-call', { method: 'POST' }).then(r => r.json()),
 });
@@ -58,6 +72,23 @@ const call = await SonusWebCall.start({
 call.on('stateChange', s => ...);       // listening | thinking | speaking | ...
 call.on('transcriptUpdate', lines => ...); // full transcript, re-sent on change
 call.on('tool', t => ...);              // { name, status } — "Checking your account…"
+```
+
+```ts
+// Text — same agent, typed
+const chat = await SonusTextCall.start({
+  credentials: () => fetch('/api/start-call', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ modality: 'text' }),
+  }).then(r => r.json()),
+});
+
+chat.on('stateChange', s => ...);          // idle | thinking | replying | ...
+chat.on('transcriptUpdate', lines => ...); // authoritative — render this
+chat.on('delta', ({ text }) => ...);       // optional live-typing stream
+await chat.send('what is my balance?');
+await chat.hangup();                       // a chat left open is a call left open
 call.on('disconnected', () => ...);
 
 await call.mute();
