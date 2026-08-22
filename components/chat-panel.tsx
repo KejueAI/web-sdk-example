@@ -12,6 +12,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { SonusTextCall } from '@kejue/sonus-web';
 import type { TextAgentState, ToolActivity, TranscriptLine } from '@kejue/sonus-web';
 
+// `disconnected` is both "never started" and "finished", so the copy for it
+// depends on whether this chat has ever been live — otherwise a fresh page
+// greets you with "Chat ended".
 const STATE_COPY: Record<TextAgentState, string> = {
   disconnected: 'Chat ended',
   connecting: 'Connecting…',
@@ -146,7 +149,9 @@ export function ChatPanel() {
             End chat
           </button>
         )}
-        <span className={`status status-${state}`}>{STATE_COPY[state]}</span>
+        <span className={`status status-${state}`}>
+          {state === 'disconnected' && !callId ? 'Not started' : STATE_COPY[state]}
+        </span>
       </div>
 
       {callId && (
